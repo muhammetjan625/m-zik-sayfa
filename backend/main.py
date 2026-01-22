@@ -1,8 +1,9 @@
 import os
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Body
 from fastapi.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from bson import ObjectId
+from pydantic import BaseModel
 import cloudinary
 import cloudinary.uploader
 
@@ -18,12 +19,10 @@ cloudinary.config(
 
 # --- 2. MONGODB ATLAS BAĞLANTISI ---
 MONGO_URL = "mongodb+srv://admin:sokrates123@cluster0.ixibj0l.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
-
-# Veritabanı Bağlantısını Başlat
 client = AsyncIOMotorClient(MONGO_URL)
 db = client.music_cloud_db
 
-# CORS Ayarları (Tüm sitelere izin ver)
+# CORS Ayarları
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -32,7 +31,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Helper Fonksiyon
+# --- MODELLER ---
+# Kullanıcıdan gelen veriyi kontrol etmek için şablon
+class UserLogin(BaseModel):
+    username: str
+    password: str
+
+# Helper
 def song_helper(song) -> dict:
     return {
         "id": str(song["_id"]),
@@ -44,7 +49,28 @@ def song_helper(song) -> dict:
 
 # --- ENDPOINTLER ---
 
-# 1. Şarkı Yükle (Düzeltilmiş Versiyon)
+# 1. Kayıt Ol (YENİ EKLENDİ)
+@app.post("/register")
+async def register(user: UserLogin):
+    # Kullanıcı zaten var mı?
+    existing_user = await db["users"].find_one({"username": user.username})
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Bu kullanıcı adı zaten alınmış")
+    
+    # Yeni kullanıcıyı kaydet
+    new_user = {"username": user.username, "password": user.password} # Not: Gerçek projede şifre şifrelenmelidir!
+    await db["users"].insert_one(new_user)
+    return {"message": "Kayıt başarılı!"}
+
+# 2. Giriş Yap (YENİ EKLENDİ)
+@app.post("/login")
+async def login(user: UserLogin):
+    existing_user = await db["users"].find_one({"username": user.username, "password": user.password})
+    if not existing_user:
+        raise HTTPException(status_code=400, detail="Kullanıcı adı veya şifre hatalı")
+    return {"message": "Giriş başarılı", "username": user.username}
+
+# 3. Şarkı Yükle
 @app.post("/upload")
 async def upload_song(
     title: str = Form(...),
@@ -53,47 +79,29 @@ async def upload_song(
     cover: UploadFile = File(...)
 ):
     try:
-        print(f"Yükleme başladı: {title} - {artist}")
-        
-        # 1. MÜZİĞİ YÜKLE (Zorunlu)
-        # Dosya imlecini başa alıyoruz (Garanti olsun diye)
         file.file.seek(0)
         music_res = cloudinary.uploader.upload(file.file, resource_type="video", folder="music_cloud/songs")
-        music_url = music_res["secure_url"]
-
-        # 2. KAPAĞI YÜKLE (Hata Toleranslı)
-        # Önce varsayılan bir resim belirliyoruz
-        cover_url = "https://placehold.co/300x300/1db954/white?text=Music"
         
+        cover_url = "https://placehold.co/300x300/1db954/white?text=Music"
         try:
-            # Dosya imlecini başa al
             cover.file.seek(0)
-            
-            # Cloudinary'ye yüklemeyi dene
-            # Eğer dosya boşsa (0 byte) Cloudinary hata fırlatır, biz de 'except' bloğuna düşeriz.
-            upload_result = cloudinary.uploader.upload(cover.file, folder="music_cloud/covers")
-            cover_url = upload_result["secure_url"]
-            
-        except Exception as e:
-            print(f"⚠️ Kapak resmi yüklenemedi (Boş olabilir), varsayılan resim kullanılacak. Hata: {e}")
+            cover_res = cloudinary.uploader.upload(cover.file, folder="music_cloud/covers")
+            cover_url = cover_res["secure_url"]
+        except:
+            pass
 
-        # 3. VERİTABANINA KAYDET
         new_song = {
             "title": title,
             "artist": artist,
-            "music_url": music_url,
+            "music_url": music_res["secure_url"],
             "cover_url": cover_url
         }
         await db["songs"].insert_one(new_song)
-        
-        print("✅ Başarıyla Yüklendi!")
         return {"message": "Yüklendi! 🚀"}
-
     except Exception as e:
-        print("❌ Kritik Hata:", e)
-        raise HTTPException(status_code=500, detail=f"Sunucu Hatası: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
-# 2. Şarkıları Getir
+# 4. Şarkıları Getir
 @app.get("/songs")
 async def get_songs():
     songs = []
@@ -101,13 +109,13 @@ async def get_songs():
         songs.append(song_helper(song))
     return songs
 
-# 3. Şarkı Sil
+# 5. Şarkı Sil
 @app.delete("/songs/{song_id}")
 async def delete_song(song_id: str):
-    try:
-        result = await db["songs"].delete_one({"_id": ObjectId(song_id)})
-        if result.deleted_count == 1:
-            return {"message": "Silindi"}
-        raise HTTPException(404, "Bulunamadı")
-    except Exception:
-        raise HTTPException(400, "Geçersiz ID")
+    await db["songs"].delete_one({"_id": ObjectId(song_id)})
+    return {"message": "Silindi"}
+
+# Ana Sayfa Kontrolü
+@app.get("/")
+def read_root():
+    return {"message": "Backend Çalışıyor"}
