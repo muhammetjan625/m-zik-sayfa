@@ -1,0 +1,15 @@
+.login-container {
+    display: flex; justify-content: center; align-items: center;
+    height: 100vh; background-color: #121212; color: white;
+}
+.login-box {
+    background: #1e1e1e; padding: 40px; border-radius: 8px; width: 300px; text-align: center;
+}
+input {
+    width: 90%; padding: 10px; margin: 10px 0; border-radius: 4px; border: none; background: #333; color: white;
+}
+button {
+    width: 100%; padding: 10px; background: #1db954; border: none; color: white; font-weight: bold; cursor: pointer; border-radius: 20px;
+}
+button:hover { background: #1ed760; }
+.error-msg { color: #ff5555; font-size: 14px; margin-bottom: 10px; }
