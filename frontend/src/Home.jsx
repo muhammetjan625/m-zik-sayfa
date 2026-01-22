@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import Player from './components/Player';
 import './Home.css';
@@ -13,32 +12,32 @@ function Home() {
   const [musicFile, setMusicFile] = useState(null);
   const [autoData, setAutoData] = useState({ title: '', artist: '' });
 
-  // ✅ DÜZELTME BURADA: fetchSongs fonksiyonunu useEffect'in ÜSTÜNE aldık.
+  // 👇 API ADRESİN (Render Backend)
+  const API_URL = "https://muzik-backend.onrender.com";
+
+  // Şarkıları Getir
   const fetchSongs = async () => {
     try {
-      const res = await fetch('http://127.0.0.1:8000/songs');
+      const res = await fetch(`${API_URL}/songs`);
       if (res.ok) setSongs(await res.json());
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error("Bağlantı hatası:", e); }
   };
 
-  // useEffect artık fetchSongs tanımlandıktan sonra çalışıyor
   useEffect(() => { 
     fetchSongs(); 
   }, []);
 
-  // Şarkı Silme Fonksiyonu
+  // Şarkı Silme
   const handleDelete = async (e, songId) => {
-    e.stopPropagation(); // Kartın tıklanmasını (çalmayı) engelle
+    e.stopPropagation(); 
     if (!window.confirm("Bu şarkıyı silmek istediğine emin misin?")) return;
 
     try {
-      const res = await fetch(`http://127.0.0.1:8000/songs/${songId}`, {
+      const res = await fetch(`${API_URL}/songs/${songId}`, {
         method: 'DELETE'
       });
       if (res.ok) {
-        // Listeden anında kaldır
         setSongs(songs.filter(song => song.id !== songId));
-        // Eğer silinen şarkı çalıyorsa playerı durdur
         if (currentSong?.id === songId) {
           setCurrentSong(null);
           setIsPlaying(false);
@@ -51,6 +50,7 @@ function Home() {
     }
   };
 
+  // Dosya Seçimi
   const handleFileSelect = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -68,6 +68,7 @@ function Home() {
     }
   };
 
+  // Şarkı Yükleme
   const handleUpload = async () => {
     if (!musicFile) return;
     const formData = new FormData();
@@ -75,21 +76,20 @@ function Home() {
     formData.append('artist', autoData.artist);
     formData.append('file', musicFile);
     
-    // Backend'de hata almamak için boş bir kapak dosyası gönderiyoruz
-    // Backend zaten bunu algılayıp varsayılan resim atıyor.
     const emptyBlob = new Blob([""], { type: "image/png" });
     formData.append('cover', emptyBlob, "default.png");
 
     try {
-      const res = await fetch('http://127.0.0.1:8000/upload', { method: 'POST', body: formData });
+      const res = await fetch(`${API_URL}/upload`, { method: 'POST', body: formData });
       if (res.ok) {
         setShowModal(false);
         setMusicFile(null);
-        fetchSongs(); // Listeyi güncelle
+        alert("Şarkı başarıyla yüklendi! 🚀");
+        fetchSongs(); 
       } else {
         alert("Yükleme başarısız!");
       }
-    } catch (e) { alert("Sunucu hatası"); }
+    } catch (e) { alert("Sunucu hatası: " + e); }
   };
 
   return (
@@ -130,18 +130,11 @@ function Home() {
                       onError={(e) => { e.target.onerror=null; e.target.src="https://placehold.co/300x300/282828/white?text=Music"; }} 
                       alt={song.title} 
                     />
-                    
-                    {/* Oynat Butonu */}
-                    <div className="play-overlay">
-                      <i className="fas fa-play"></i>
-                    </div>
-
-                    {/* SİLME BUTONU */}
+                    <div className="play-overlay"><i className="fas fa-play"></i></div>
                     <button className="delete-btn" onClick={(e) => handleDelete(e, song.id)}>
                         <i className="fas fa-trash"></i>
                     </button>
                   </div>
-                  
                   <div className="card-info">
                     <h4>{song.title}</h4>
                     <p>{song.artist}</p>
