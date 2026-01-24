@@ -6,6 +6,7 @@ from bson import ObjectId
 from pydantic import BaseModel
 import cloudinary
 import cloudinary.uploader
+import certifi
 
 app = FastAPI()
 
@@ -19,7 +20,10 @@ cloudinary.config(
 
 # --- 2. MONGODB ATLAS BAĞLANTISI ---
 MONGO_URL = "mongodb+srv://admin:sokrates123@cluster0.ixibj0l.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
-client = AsyncIOMotorClient(MONGO_URL)
+# SSL Sertifika hatasını çözen sihirli kod:
+ca = certifi.where()
+
+client = AsyncIOMotorClient(MONGO_URL, tlsCAFile=ca)
 db = client.music_cloud_db
 
 # CORS Ayarları
